@@ -960,13 +960,12 @@ class RealSenseCamera(BaseCamera):
     
     def _update_frame(self):
         frames = self.pipeline.wait_for_frames()
-        aligned_frames = self.align.process(frames)
-        color_frame = aligned_frames.get_color_frame()
+        color_frame = frames.get_color_frame()
         if not color_frame:
             return None
 
-        if self._enable_depth:   
-            depth_frame = aligned_frames.get_depth_frame()
+        if self._enable_depth:
+            depth_frame = frames.get_depth_frame()
             if depth_frame:
                 self._latest_depth = np.asanyarray(depth_frame.get_data())
                 if self._zmq_depth_buffer is not None:
