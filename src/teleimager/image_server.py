@@ -1371,6 +1371,7 @@ class ImageServer:
 
     def _zmq_pub(self, cam_topic: str, camera: BaseCamera):
         try:
+            has_depth = camera.enable_depth()
             interval = 1.0 / camera.get_fps()
             next_frame_time = time.monotonic()
 
@@ -1383,6 +1384,12 @@ class ImageServer:
                     self._stop_event.set()
                     break
 
+                # Publish depth in the same tick as color to guarantee 1:1 sync
+                if has_depth:
+                    depth_bytes = camera.get_depth_bytes()
+                    if depth_bytes is not None:
+                        self._zmq_publisher_manager.publish(depth_bytes, camera.get_zmq_depth_port())
+
                 next_frame_time += interval
                 sleep_time = next_frame_time - time.monotonic()
                 if sleep_time > 0:
@@ -1392,24 +1399,6 @@ class ImageServer:
         except Exception as e:
             logger_mp.error(f"[Image Server] Failed to publish zmq frame from {cam_topic} camera.")
             self._stop_event.set()
-   
-    def _zmq_depth_pub(self, cam_topic: str, camera: BaseCamera):
-        try:
-            interval = 1.0 / camera.get_fps()
-            next_frame_time = time.monotonic()
-            while not self._stop_event.is_set():
-                depth_bytes = camera.get_depth_bytes()
-                if depth_bytes is not None:
-                    self._zmq_publisher_manager.publish(depth_bytes, camera.get_zmq_depth_port())
-                next_frame_time += interval
-                sleep_time = next_frame_time - time.monotonic()
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                else:
-                    next_frame_time = time.monotonic()
-        except Exception as e:
-            logger_mp.error(f"[Image Server] Failed to publish depth zmq frame from {cam_topic} camera.")
-            self._stop_event.set()   
 
     def _webrtc_pub(self, cam_topic: str, camera: BaseCamera):
         try:
@@ -1497,11 +1486,6 @@ class ImageServer:
 
             if camera.enable_zmq():
                 t = threading.Thread(target=self._zmq_pub, args=(camera_topic, camera), daemon=True)
-                t.start()
-                self._publisher_threads.append(t)
-
-            if camera.enable_depth():
-                t = threading.Thread(target=self._zmq_depth_pub, args=(camera_topic, camera), daemon=True)
                 t.start()
                 self._publisher_threads.append(t)
 
