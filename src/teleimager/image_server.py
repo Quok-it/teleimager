@@ -1293,6 +1293,8 @@ class ImageServer:
                         self._cameras[cam_topic] = RealSenseCamera(cam_topic, serial_number, img_shape, fps,
                                                                    enable_zmq, zmq_port, enable_webrtc, webrtc_port, webrtc_codec,
                                                                    enable_depth=enable_depth, zmq_depth_port=zmq_depth_port)
+                        intr = self._cameras[cam_topic].intrinsics
+                        cam_cfg['intrinsics'] = {'fx': intr.fx, 'fy': intr.fy, 'cx': intr.ppx, 'cy': intr.ppy}
 
                 elif cam_type == "uvc":
                     uid = None
