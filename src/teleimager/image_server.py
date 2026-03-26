@@ -932,6 +932,10 @@ class RealSenseCamera(BaseCamera):
                 self.g_depth_scale = depth_sensor.get_depth_scale()
 
             self.intrinsics = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
+            if self._enable_depth:
+                self.depth_intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+            else:
+                self.depth_intrinsics = None
             logger_mp.info(str(self))
         except Exception as e:
             if self.pipeline:
@@ -1293,8 +1297,26 @@ class ImageServer:
                         self._cameras[cam_topic] = RealSenseCamera(cam_topic, serial_number, img_shape, fps,
                                                                    enable_zmq, zmq_port, enable_webrtc, webrtc_port, webrtc_codec,
                                                                    enable_depth=enable_depth, zmq_depth_port=zmq_depth_port)
-                        intr = self._cameras[cam_topic].intrinsics
+                        rs_cam = self._cameras[cam_topic]
+                        intr = rs_cam.intrinsics
                         cam_cfg['intrinsics'] = {'fx': intr.fx, 'fy': intr.fy, 'cx': intr.ppx, 'cy': intr.ppy}
+                        cam_cfg['color_intrinsics'] = {
+                            'width': intr.width, 'height': intr.height,
+                            'fx': intr.fx, 'fy': intr.fy,
+                            'ppx': intr.ppx, 'ppy': intr.ppy,
+                            'distortion_model': str(intr.model),
+                            'distortion_coeffs': list(intr.coeffs),
+                        }
+                        dintr = rs_cam.depth_intrinsics
+                        if dintr is not None:
+                            cam_cfg['depth_intrinsics'] = {
+                                'width': dintr.width, 'height': dintr.height,
+                                'fx': dintr.fx, 'fy': dintr.fy,
+                                'ppx': dintr.ppx, 'ppy': dintr.ppy,
+                                'distortion_model': str(dintr.model),
+                                'distortion_coeffs': list(dintr.coeffs),
+                            }
+                        cam_cfg['depth_scale'] = getattr(rs_cam, 'g_depth_scale', None)
 
                 elif cam_type == "uvc":
                     uid = None
