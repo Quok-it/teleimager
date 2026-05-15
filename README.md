@@ -96,9 +96,9 @@ bash setup_uvc.sh
 Run the following command to discover connected cameras:
 
 ```bash
-python -m teleimager.image_server --cf
+python -m teleimager.image_server --cf --rs
 # or
-teleimager-server --cf
+teleimager-server --cf --rs
 ```
 
 You will see output similar to:
@@ -177,18 +177,18 @@ You will see output similar to:
 
 
 ### 1.3 📡 Start the Image Server
+Replace the serial number in `cam_config_server.yaml` with the serial number from above. 
 
 After filling `cam_config_server.yaml` according to camera discovery, start the server:
 
 ```bash
-python -m teleimager.image_server
 python -m teleimager.image_server --rs   # if using RealSense
 
 # or
-teleimager-server
 teleimager-server --rs
 ```
 
+The camera is fully configured on the robot side. Please start teleoperating and reach out with any questions!
 
 
 ## 2. Image Client
