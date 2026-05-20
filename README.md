@@ -51,7 +51,7 @@ unitree@ubuntu:~$ source ~/miniconda3/bin/activate
 
 ```bash
 (teleimager) unitree@ubuntu:~$ sudo apt install -y libusb-1.0-0-dev libturbojpeg-dev
-(teleimager) unitree@ubuntu:~$ git clone https://github.com/unitreerobotics/teleimager.git
+(teleimager) unitree@ubuntu:~$ git clone [https://github.com/unitreerobotics/teleimager.git](https://github.com/Quok-it/teleimager)
 (teleimager) unitree@ubuntu:~$ cd teleimager
 # If you only use the client
 (teleimager) unitree@ubuntu:~/teleimager$ pip install -e .
@@ -93,7 +93,7 @@ bash setup_uvc.sh
 
 ### 1.2 🔍 Discover Connected Cameras
 
-Run the following command to discover connected cameras:
+Run the following command to discover connected cameras. Note that the unitree head camera is a realsense camera so please add the `--rs` flag:
 
 ```bash
 python -m teleimager.image_server --cf --rs
