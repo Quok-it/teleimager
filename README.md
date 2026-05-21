@@ -190,52 +190,7 @@ teleimager-server --rs
 
 The camera is fully configured on the robot side. Please start teleoperating and reach out with any questions!
 
-
-## 2. Image Client
-
-The client module connects to the image server to receive and display multiple video streams. Designed for teleoperation scenarios.
-
-All user-callable APIs are under `# public api`.
-
-------
-
-### 2.1 🌀 Using ZMQ
-
-After the server is running, start the client in another terminal:
-
-```bash
-python -m teleimager.image_client
-# or
-teleimager-client --host 127.0.0.1
-```
-
-If the server runs on a NVIDIA Jetson with IP `192.168.123.164`:
-
-```bash
-teleimager-client --host 192.168.123.164
-```
-
-You will see separate OpenCV windows showing each camera stream.
-
-> Ensure `opencv-python` is installed.
-
-
-
-### 2.2 🌀 Using WebRTC
-
-For WebRTC streams, open a browser:
-
-```bash
-https://<host_ip>:<webrtc_port>
-# e.g.
-https://192.168.123.164:60001
-```
-
-And please press `start` button  top-right.
-
-
-
-## 3. 🚀 Automatic Startup Service
+## 2. 🚀 Automatic Startup Service
 
 After successful setup and testing, enable automatic startup:
 
@@ -245,142 +200,16 @@ bash setup_autostart.sh
 
 Follow the prompts to complete configuration.
 
-
-
-## 4. 🧠 Design Principles
-
-### 4.1 Why Support Multiple Camera Identifiers?
-
-Linux cameras can be identified in multiple ways:
-
-- **Physical path (physical_path)**
-- **Serial number (serial_number)**
-- **Video device path (video_id → /dev/videoX)**
-
-Each has pros and cons. Tele Imager supports all three for stable and flexible identification.
-
-**1. Physical path**
-
-🎯 Advantages:
-
-- Not affected by reboot or plug order
-- Works even if cameras share serial numbers
-- Ideal for fixed multi-camera deployments (robot head + wrists)
-
-⚠️ Disadvantages:
-
-- Not flexible: changing USB port requires config update
-
-**2. Serial number**
-
-🎯 Advantages:
-
-- Remains constant across USB ports
-- High identification accuracy
-- Simple configuration
-- Recommended for RealSense
-
-⚠️ Disadvantages:
-
-- Low-cost cameras may reuse serial numbers
-- Some serial numbers are unstable or malformed
-
-**3. Video device path (/dev/videoX)**
-
-🎯 Advantages:
-
-- Direct usage: just specify `video_id: X`
-- Good for single camera or temporary testing
-
-⚠️ Disadvantages:
-
-- Changes with plug order or reboot
-- Unreliable for multi-camera setups
-
-| Identifier    | Stability | Flexibility | Recommended Use                            |
-| ------------- | --------- | ----------- | ------------------------------------------ |
-| Physical path | ⭐⭐⭐⭐⭐     | ⭐           | Multi-camera fixed setup, low-cost cameras |
-| Serial number | ⭐⭐⭐⭐      | ⭐⭐⭐         | RealSense, unique serial cameras           |
-| video_id      | ⭐⭐        | ⭐⭐⭐⭐⭐       | Single camera, temporary testing           |
-
-
-
-### 4.2 Why Support Three Transmission Methods?
-
-The image server has two main uses:
-
-1. **Recording high-quality data** → For model training
-2. **Real-time visualization (XR/UI)** → For debugging and monitoring
-
-Different scenarios (local, LAN, remote) require different latency and bandwidth trade-offs. Thus, three transmission methods are supported.
-
-------
-
-**1. ZeroMQ PUB–SUB**
-
-**Use case:** Server and client on **different machines** over LAN
-
-🎯 Advantages
-
-- High-quality frame transmission in LAN
-- Low overhead, high throughput
-- Low latency without sacrificing image quality
-
-------
-
-**2. WebRTC**
-
-**Use case:** Real-time preview, VR teleoperation, UI debugging
-
-🎯 Advantages
-
-- Low latency with adaptive bitrate
-- H.264(default) / VP8
-- Browser and VR device compatible
-
-------
-
-**3. Shared Memory**
-
-**Use case:** Server and client on **same machine** for maximum performance
-
-🎯 Advantages
-
-- Maximum bandwidth (memory-limited)
-- μs-level latency
-- Zero-copy or single-copy possible
-- Low CPU usage
-
-
-
-### 4.3 Triple Ring Buffer Benefits
-
-- **Non-blocking Read/Write:**
-
-  Writer does not wait for reader; keeps writing in available slots
-
-  Reader always fetches the latest complete frame
-
-- **No Tearing:**
-
-  Reader never reads a partially written frame due to write avoidance logic
-
-- **Always Fresh:**
-
-  Unlike FIFO queues, old frames can be overwritten, so the reader always gets the latest frame
-
-  Critical for real-time applications
-
-## 5. 🧐 FAQ
+## 3. 🧐 FAQ
 
 1. Why is the serial number and other information displayed as "unknown" in the `teleimager-server --cf` output?
 
     You can try running the command with sudo privileges. Some cameras require elevated permissions to retrieve full hardware metadata. For example:
 
     ```bash
-    sudo $(which teleimager-server) --cf
+    sudo $(which teleimager-server) --cf --rs
     ```
 
-## 6. 🙏 Acknowledgement
+## 4. 🙏 Acknowledgement
 
 Some code references: https://github.com/ARCLab-MIT/beavr-bot
