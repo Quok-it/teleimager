@@ -190,7 +190,51 @@ teleimager-server --rs
 
 The camera is fully configured on the robot side. Please start teleoperating and reach out with any questions!
 
-## 2. 🚀 Automatic Startup Service
+## 2. 🔴 LiDAR Support (Unitree G1 MID360)
+
+LiDAR runs as a **separate C++ process** (`lidar_bridge.cpp`) alongside the main image server.
+
+### 2.1 Build, run, and enable autostart
+
+Run the setup script — it handles everything (no conda required):
+
+```bash
+cd ~/teleimager
+bash setup_lidar_autostart.sh
+```
+
+This will:
+1. Copy `lidar_bridge.cpp` into the unitree_sdk2 example tree
+2. Build it against the bundled CycloneDDS libraries
+3. Prompt for the network interface — **press Enter to use `eth0`** (correct for all Unitree G1 robots)
+4. Register and start a systemd service that runs on every boot
+
+### 2.2 Manual run (without autostart)
+
+```bash
+LD_LIBRARY_PATH=/home/unitree/unitree_sdk2/thirdparty/lib/aarch64 /home/unitree/unitree_sdk2/build/bin/lidar_bridge eth0
+```
+
+Expected output:
+```
+[LidarBridge] ZMQ cloud:55560  range:55561
+[LidarBridge] Subscribed to rt/utlidar/cloud_livox_mid360 on eth0 — waiting for data...
+```
+
+The bridge runs silently after startup — data is streamed over ZMQ.
+
+### 2.3 ZMQ output ports
+
+| Port | Content |
+|------|---------|
+| 55560 | Raw XYZ point cloud (`uint32` N + N×12 `float32` bytes) |
+| 55561 | Spherical range image (128×1024 grayscale bytes) |
+
+---
+
+## 3. 🚀 Automatic Startup Service
+
+### 3.1 Camera server
 
 After successful setup and testing, enable automatic startup:
 
@@ -200,7 +244,11 @@ bash setup_autostart.sh
 
 Follow the prompts to complete configuration.
 
-## 3. 🧐 FAQ
+### 3.2 LiDAR bridge
+
+Autostart is set up automatically by `bash setup_lidar_autostart.sh` (see section 2.1). The service (`lidar-bridge.service`) starts on every boot and publishes LiDAR data on ZMQ ports 55560/55561.
+
+## 4. 🧐 FAQ
 
 1. Why is the serial number and other information displayed as "unknown" in the `teleimager-server --cf` output?
 
@@ -210,6 +258,6 @@ Follow the prompts to complete configuration.
     sudo $(which teleimager-server) --cf --rs
     ```
 
-## 4. 🙏 Acknowledgement
+## 5. 🙏 Acknowledgement
 
 Some code references: https://github.com/ARCLab-MIT/beavr-bot
