@@ -116,6 +116,7 @@ static std::vector<uint8_t> make_range_image(const std::vector<XYZ>& pts) {
         float theta = std::atan2(p.y, p.x);
         float phi   = std::atan2(p.z, std::sqrt(p.x*p.x + p.y*p.y));
         int col = (int)(((theta + (float)M_PI) / (2.0f*(float)M_PI)) * W);
+        col = (col + W / 2) % W;  // center rear view; forward splits at edges
         int row = (int)(((phi_max - phi) / (phi_max - phi_min)) * H);
         col = std::max(0, std::min(W - 1, col));
         row = std::max(0, std::min(H - 1, row));
