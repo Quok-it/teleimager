@@ -39,12 +39,12 @@ static void* g_range_pub = nullptr;
 static int g_range_H      = 128;
 static int g_range_W      = 1024;
 static float g_range_max  = 20.0f;
-// MID360 native FOV is -7° to +52° elevation, but the sensor is mounted
-// inverted on the G1 (180° rotation around X), so the real-world coverage
-// flips to approximately -52° to +7°. The -2.3° pitch inclination shifts
-// this slightly; using -55° to +10° gives comfortable margin.
-static float g_phi_min    = -55.0f * (float)M_PI / 180.0f;
-static float g_phi_max    =  10.0f * (float)M_PI / 180.0f;
+// MID360 vertical FOV per Unitree spec: -7° to +52° in sensor frame.
+// Sensor is mounted inverted (-2.3° pitch) so effective world-frame
+// coverage is approximately -54° to +5°. We use a wide window here and
+// let the per-frame dynamic range fill the image correctly.
+static const float PHI_MIN_HARD = -60.0f * (float)M_PI / 180.0f;
+static const float PHI_MAX_HARD =  55.0f * (float)M_PI / 180.0f;
 
 // ---------------------------------------------------------------
 // Point cloud parsing
@@ -82,12 +82,7 @@ static std::vector<uint8_t> encode_cloud(const std::vector<XYZ>& pts) {
     uint32_t n = (uint32_t)pts.size();
     std::vector<uint8_t> buf(4 + n * 12);
     std::memcpy(buf.data(), &n, 4);
-    // Apply inverted-mounting correction before publishing so downstream
-    // consumers (episode writer, rerun) get world-aligned coordinates.
-    for (uint32_t i = 0; i < n; ++i) {
-        XYZ c{ pts[i].x, -pts[i].y, -pts[i].z };
-        std::memcpy(buf.data() + 4 + i * 12, &c, 12);
-    }
+    std::memcpy(buf.data() + 4, pts.data(), n * 12);
     return buf;
 }
 
@@ -99,18 +94,30 @@ static std::vector<uint8_t> make_range_image(const std::vector<XYZ>& pts) {
     int H = g_range_H, W = g_range_W;
     std::vector<uint8_t> img(H * W, 0);
 
+    // First pass: compute actual phi range within the documented FOV window.
+    float phi_min =  1e9f, phi_max = -1e9f;
     for (const auto& p : pts) {
-        // Correct for inverted mounting (180° rotation around X axis):
-        // sensor Z points down in world frame, Y is mirrored.
-        float cx =  p.x;
-        float cy = -p.y;
-        float cz = -p.z;
-        float r = std::sqrt(cx*cx + cy*cy + cz*cz);
+        float r = std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
         if (r < 0.01f) continue;
-        float theta = std::atan2(cy, cx);
-        float phi   = std::atan2(cz, std::sqrt(cx*cx + cy*cy));
+        float phi = std::atan2(p.z, std::sqrt(p.x*p.x + p.y*p.y));
+        if (phi < PHI_MIN_HARD || phi > PHI_MAX_HARD) continue;
+        if (phi < phi_min) phi_min = phi;
+        if (phi > phi_max) phi_max = phi;
+    }
+    if (phi_max <= phi_min) return img;
+    float margin = (phi_max - phi_min) * 0.05f;
+    phi_min -= margin;
+    phi_max += margin;
+
+    // Second pass: project.
+    for (const auto& p : pts) {
+        float r = std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
+        if (r < 0.01f) continue;
+        float theta = std::atan2(p.y, p.x);
+        float phi   = std::atan2(p.z, std::sqrt(p.x*p.x + p.y*p.y));
         int col = (int)(((theta + (float)M_PI) / (2.0f*(float)M_PI)) * W);
-        int row = (int)(((g_phi_max - phi) / (g_phi_max - g_phi_min)) * H);
+        col = (col + W / 2) % W;  // center rear view; forward splits at edges
+        int row = (int)(((phi_max - phi) / (phi_max - phi_min)) * H);
         col = std::max(0, std::min(W - 1, col));
         row = std::max(0, std::min(H - 1, row));
         uint8_t val = (uint8_t)std::min(255.0f, r / g_range_max * 255.0f);
