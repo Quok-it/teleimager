@@ -743,8 +743,11 @@ class ImageClient:
         raw = self._subscriber_manager.subscribe(self._host, depth_port, request_bgr=False)
         if raw is None or raw.jpg is None:
             return None
-        h, w = self._cam_config['head_camera']['image_shape']
-        return np.frombuffer(raw.jpg, dtype=np.uint16).reshape(h, w)   
+        # Depth may stream at a different resolution than color; reshape with
+        # depth_shape, falling back to image_shape for cameras that share one.
+        head_cfg = self._cam_config['head_camera']
+        h, w = head_cfg.get('depth_shape', head_cfg['image_shape'])
+        return np.frombuffer(raw.jpg, dtype=np.uint16).reshape(h, w)
 
     def get_left_wrist_frame(self):
         return self._subscriber_manager.subscribe(self._host, self._cam_config['left_wrist_camera']['zmq_port'], request_bgr=self._request_bgr)

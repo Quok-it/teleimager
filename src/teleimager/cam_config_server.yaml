@@ -25,7 +25,12 @@ head_camera:
 
   # Image Format
   # image resolution: [height, width]
-  image_shape: [720, 1280]
+  image_shape: [1080, 1920]
+  # depth resolution: [height, width]. Kept separate from color because RealSense
+  # depth does not support 1080p; max is 1280x720. Color and depth are streamed
+  # at independent resolutions.
+  # Omit this key to stream depth at image_shape (matching-resolution setups).
+  depth_shape: [720, 1280]
   binocular: true
   # frame per second
   fps: 30
