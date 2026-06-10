@@ -190,6 +190,37 @@ teleimager-server --rs
 
 The camera is fully configured on the robot side. Please start teleoperating and reach out with any questions!
 
+### 1.4 🎚️ Toggle Head Camera Resolution (1080p / 720p)
+
+The RealSense head camera can stream color at 1080p or 720p. RealSense depth tops out at 1280x720, so the two resolutions are configured independently in `cam_config_server.yaml` on the robot.
+
+**For 1080p color (depth stays at 720p):**
+
+```yaml
+  image_shape: [1080, 1920]
+  depth_shape: [720, 1280]
+```
+
+**For 720p color (depth matches color):**
+
+```yaml
+  image_shape: [720, 1280]
+  # depth_shape omitted — depth follows image_shape
+```
+
+Then restart the image server for the change to take effect:
+
+```bash
+# if running as a systemd service (see section 3.1)
+sudo systemctl restart teleimager.service
+sudo journalctl -u teleimager.service -f   # confirm: "initialized with 1080x1920 @ 30 FPS" (or 720x1280)
+
+# if running manually, Ctrl+C and start again
+teleimager-server --rs
+```
+
+No client-side changes are needed: the server publishes the measured color/depth intrinsics with the camera config, and xr_teleoperate auto-decides depth alignment from them — matching resolutions (720p) are aligned to color, mismatched resolutions (1080p color / 720p depth) keep depth raw at its native resolution.
+
 ## 2. 🔴 LiDAR Support (Unitree G1 MID360)
 
 LiDAR runs as a **separate C++ process** (`lidar_bridge.cpp`) alongside the main image server.

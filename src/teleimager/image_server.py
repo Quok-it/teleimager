@@ -906,11 +906,15 @@ class BaseCamera:
         raise NotImplementedError
 
 class RealSenseCamera(BaseCamera):
-    def __init__(self, cam_topic, serial_number, img_shape, fps, 
-                 enable_zmq=True, zmq_port = 55555, enable_webrtc=False, webrtc_port=66666, webrtc_codec=None, enable_depth=False, zmq_depth_port=None):
+    def __init__(self, cam_topic, serial_number, img_shape, fps,
+                 enable_zmq=True, zmq_port = 55555, enable_webrtc=False, webrtc_port=66666, webrtc_codec=None, enable_depth=False, zmq_depth_port=None,
+                 depth_shape=None):
         rs = self.check_pyrealsense2_install()
         super().__init__(cam_topic, img_shape, fps, enable_zmq, zmq_port, enable_webrtc, webrtc_port, webrtc_codec)
         self._serial_number = serial_number
+        # Depth can stream at a different resolution than color (RealSense depth
+        # tops out at 1280x720). Fall back to the color shape when unset.
+        self._depth_shape = depth_shape or img_shape
         self._enable_depth = enable_depth
         self._zmq_depth_port = zmq_depth_port
         self._zmq_depth_buffer = TripleRingBuffer() if (enable_depth and zmq_depth_port) else None
@@ -924,7 +928,7 @@ class RealSenseCamera(BaseCamera):
 
             config.enable_stream(rs.stream.color, self._img_shape[1], self._img_shape[0], rs.format.bgr8, self._fps)
             if self._enable_depth:
-                config.enable_stream(rs.stream.depth, self._img_shape[1], self._img_shape[0], rs.format.z16, self._fps)
+                config.enable_stream(rs.stream.depth, self._depth_shape[1], self._depth_shape[0], rs.format.z16, self._fps)
 
             profile = self.pipeline.start(config)
             self._device = profile.get_device()
@@ -1251,6 +1255,7 @@ class ImageServer:
                 if self._isaacsim_enable and cam_type!="isaacsim":
                     cam_type = "isaacsim"
                 img_shape = cam_cfg.get("image_shape", None)
+                depth_shape = cam_cfg.get("depth_shape", img_shape)
                 fps = cam_cfg.get("fps", 30)
                 video_id = cam_cfg.get("video_id", "0")
                 video_path = f"/dev/video{video_id}" if video_id else None
@@ -1300,7 +1305,8 @@ class ImageServer:
                         zmq_depth_port = cam_cfg.get('zmq_depth_port', None)
                         self._cameras[cam_topic] = RealSenseCamera(cam_topic, serial_number, img_shape, fps,
                                                                    enable_zmq, zmq_port, enable_webrtc, webrtc_port, webrtc_codec,
-                                                                   enable_depth=enable_depth, zmq_depth_port=zmq_depth_port)
+                                                                   enable_depth=enable_depth, zmq_depth_port=zmq_depth_port,
+                                                                   depth_shape=depth_shape)
                         rs_cam = self._cameras[cam_topic]
                         intr = rs_cam.intrinsics
                         cam_cfg['intrinsics'] = {'fx': intr.fx, 'fy': intr.fy, 'cx': intr.ppx, 'cy': intr.ppy}
