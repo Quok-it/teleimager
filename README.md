@@ -221,6 +221,116 @@ teleimager-server --rs
 
 No client-side changes are needed: the server publishes the measured color/depth intrinsics with the camera config, and xr_teleoperate auto-decides depth alignment from them — matching resolutions (720p) are aligned to color, mismatched resolutions (1080p color / 720p depth) keep depth raw at its native resolution.
 
+### 1.5 ➕ Add Extra Cameras on the Robot (gripper / wrist / overhead / …)
+
+Any camera plugged into the robot can be exposed as an **extra camera**. The robot's `cam_config_server.yaml` contains all of the information about the cameras on the robot — add a topic here and the xr_teleoperate client **auto-discovers it**. No other changes are required: the camera is recorded as an extra `color_N` slot (plus `depth_N` if it has depth).
+
+Workflow for every extra camera:
+
+1. Plug the camera into the robot.
+2. Discover it (section 1.2): `teleimager-server --cf --rs`. Note the camera's `serial_number` (or `physical_path`), and pick a `format` line it actually supports (e.g. `480x640@30 MJPG`).
+3. Append a topic block to `cam_config_server.yaml` (examples below).
+4. Restart the server (section 3.1): `sudo systemctl restart teleimager.service`, then `sudo journalctl -u teleimager.service -f` and confirm a line like `[OpenCVCamera: gripper_camera] initialized … zmq port=55570`.
+
+> **Port rules.** Every camera needs its own unique `zmq_port` (and `zmq_depth_port` if it has depth). **Do not reuse** ports already taken: `55555/55556` (head color/depth), `55560/55561` (LiDAR), `55566/55567` (wrist), and `60000–60002` (config / WebRTC / preview). Start extra cameras at **`55570`** and count up.
+
+> **No hot-plug.** The yaml is read once at startup, so any add/remove/edit requires a server restart.
+
+#### A. RGB-only camera (plain USB / OpenCV)
+
+Most USB cameras (grippers, wrist cams, webcams, etc.) are color-only. Use `type: opencv`:
+
+```yaml
+# =====================================================
+# Example Camera #1 (RGB only)
+# =====================================================
+example_usb_camera:            # topic name — this is the id shown downstream
+  enable_zmq: true
+  zmq_port: 55570          # unique, unused port
+  enable_webrtc: false
+  type: opencv
+  image_shape: [480, 640]  # [height, width] — must match a format from --cf
+  fps: 30
+  # identifiers: physical_path > serial_number > video_id (see section 1.3 notes)
+  video_id: null
+  serial_number: 200901010001   # from --cf
+  physical_path: null
+```
+
+The client will record this as a `color_N` slot only.
+
+#### B. Camera with depth (RealSense)
+
+If the extra camera is a depth camera (e.g. an Intel RealSense), use `type: realsense`, add the two depth keys, and make sure the server is started with `--rs`:
+
+```yaml
+# =====================================================
+# Example Camera #2 (RGB + depth)
+# =====================================================
+example_depth_camera:
+  enable_zmq: true
+  zmq_port: 55571          # unique color port
+  enable_webrtc: false
+  type: realsense
+  image_shape: [720, 1280] # [height, width]
+  fps: 30
+
+  # Depth
+  enable_depth: true
+  zmq_depth_port: 55572    # SEPARATE unique port for the depth stream
+  # depth_shape: [720, 1280]   # optional; omit to match image_shape
+
+  # realsense resolves by serial_number only
+  video_id: null
+  serial_number: 243722075296   # from --cf --rs
+  physical_path: null
+```
+
+The client auto-detects the depth stream from the config and records both `color_N` and `depth_N` slots, with intrinsics in the episode metadata. Remember to run the server with `--rs` (section 1.3) when any RealSense is configured.
+
+#### C. Multiple extra cameras
+
+Add one block per camera. The only hard requirement is that **every port is unique** — give each camera its own `zmq_port`, and each depth-capable camera its own `zmq_depth_port`. Mix RGB-only and depth cameras freely:
+
+```yaml
+extra_usb_camera_1:            # RGB only
+  enable_zmq: true
+  zmq_port: 55570
+  enable_webrtc: false
+  type: opencv
+  image_shape: [480, 640]
+  fps: 30
+  serial_number: 200901010001
+
+extra_usb_camera_2:          # RGB only
+  enable_zmq: true
+  zmq_port: 55571
+  enable_webrtc: false
+  type: opencv
+  image_shape: [480, 640]
+  fps: 30
+  serial_number: 200901010002
+
+extra_depth_camera:           # RGB + depth
+  enable_zmq: true
+  zmq_port: 55572
+  enable_webrtc: false
+  type: realsense
+  image_shape: [720, 1280]
+  fps: 30
+  enable_depth: true
+  zmq_depth_port: 55573    # distinct from every color port above
+  serial_number: 243722075296
+```
+
+Suggested port layout when you have several cameras: color ports `55570, 55571, 55572, …` and depth ports `55580, 55581, …` so the two ranges never collide.
+
+Notes for multiple cameras:
+
+- **Recording slot order follows the order topics appear in this file.** Extras fill `color_3`, `color_4`, … (after head=0 and the two wrists=1/2). Keep the topic order stable across recording sessions, or the camera↔slot mapping in your dataset will shift.
+- **USB bandwidth is the real-world limit.** Several MJPEG cameras on one USB controller can saturate the bus and drop frames; if so, lower resolution/fps or spread cameras across different USB ports/controllers. The `--cf` output lists each camera's supported formats.
+- A dead or unplugged camera simply yields empty frames for its slot — the other cameras keep streaming and there's no crash.
+
 ## 2. 🔴 LiDAR Support (Unitree G1 MID360)
 
 LiDAR runs as a **separate C++ process** (`lidar_bridge.cpp`) alongside the main image server.
