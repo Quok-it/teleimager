@@ -93,7 +93,14 @@ bash setup_uvc.sh
 
 ### 1.2 🔍 Discover Connected Cameras
 
-Run the following command to discover connected cameras. Note that the unitree head camera is a realsense camera so please add the `--rs` flag:
+First activate the conda environment (every new shell needs this — `conda` is not on PATH until you source miniconda):
+
+```bash
+source ~/miniconda3/bin/activate
+conda activate teleimager
+```
+
+Then run the following command to discover connected cameras. Note that the unitree head camera is a realsense camera so please add the `--rs` flag:
 
 ```bash
 python -m teleimager.image_server --cf --rs
@@ -177,11 +184,21 @@ You will see output similar to:
 
 
 ### 1.3 📡 Start the Image Server
-Replace the serial number in `cam_config_server.yaml` with the serial number from above. 
 
-After filling `cam_config_server.yaml` according to camera discovery, start the server:
+`cam_config_server.yaml` lives next to the source code (e.g. `~/teleimager/src/teleimager/cam_config_server.yaml`). If you're unsure of the path, locate it with:
 
 ```bash
+find ~ -name cam_config_server.yaml
+```
+
+Replace the serial number in `cam_config_server.yaml` with the serial number from above. 
+
+After filling `cam_config_server.yaml` according to camera discovery, activate the conda environment (if not already active) and start the server:
+
+```bash
+source ~/miniconda3/bin/activate
+conda activate teleimager
+
 python -m teleimager.image_server --rs   # if using RealSense
 
 # or
@@ -216,6 +233,8 @@ sudo systemctl restart teleimager.service
 sudo journalctl -u teleimager.service -f   # confirm: "initialized with 1080x1920 @ 30 FPS" (or 720x1280)
 
 # if running manually, Ctrl+C and start again
+# (in a new shell, activate the env first:
+#   source ~/miniconda3/bin/activate && conda activate teleimager)
 teleimager-server --rs
 ```
 
@@ -228,13 +247,31 @@ Any camera plugged into the robot can be exposed as an **extra camera**. The rob
 Workflow for every extra camera:
 
 1. Plug the camera into the robot.
-2. Discover it (section 1.2): `teleimager-server --cf --rs`. Note the camera's `serial_number` (or `physical_path`), and pick a `format` line it actually supports (e.g. `480x640@30 MJPG`).
+2. Discover it (section 1.2): `teleimager-server --cf --rs`. Note the camera's `serial_number` (or `physical_path`), and pick a `format` line it actually supports (e.g. `480x640@30 MJPG`, listed as `height x width`).
 3. Append a topic block to `cam_config_server.yaml` (examples below).
 4. Restart the server (section 3.1): `sudo systemctl restart teleimager.service`, then `sudo journalctl -u teleimager.service -f` and confirm a line like `[OpenCVCamera: gripper_camera] initialized … zmq port=55570`.
 
 > **Port rules.** Every camera needs its own unique `zmq_port` (and `zmq_depth_port` if it has depth). **Do not reuse** ports already taken: `55555/55556` (head color/depth), `55560/55561` (LiDAR), `55566/55567` (wrist), and `60000–60002` (config / WebRTC / preview). Start extra cameras at **`55570`** and count up.
 
 > **No hot-plug.** The yaml is read once at startup, so any add/remove/edit requires a server restart.
+
+> **⚠️ If the server crashes with `Multiple video devices found for serial number …`**
+>
+> Many webcams (e.g. Logitech BRIO) show up as **two** devices that share **one** serial number, so identifying the camera by `serial_number` confuses the server and it refuses to start — taking the head camera down too.
+>
+> **Fix:** identify that camera by its device number instead. In its yaml block, set `video_id:` and set `serial_number` and `physical_path` to `null`.
+>
+> **Which number?** The crash message lists them, e.g. `['/dev/video6', '/dev/video8']` → use `video_id: 6`. (Don't trust the number from `--cf` while the server is running — the server reloads the camera driver on startup and the numbers shift. The crash log shows the real ones.) Pick the lower number first; if the picture is black, switch to the other.
+
+> **⚠️ `video_id` is positional — it shifts when you plug/unplug other cameras.**
+>
+> A `video_id` is **not** tied to a specific camera; it's just the current `/dev/videoN` slot, which depends on what else is connected.
+>
+> - **Unplugging:** if you remove a USB camera but leave its block in the yaml, that number may now belong to a **different** device (e.g. a RealSense depth node). The server tries to open it, fails to read frames, raises `RuntimeError: [OpenCVCamera] … failed to initialize or read frames`, and **the whole server crashes** — every camera goes down. So comment out / delete any `video_id` camera that isn't connected.
+> - **Adding:** plugging in another camera (e.g. a RealSense) can renumber an existing USB camera. Running BRIO + D405 together is fine, but the BRIO's `video_id` will differ from when it was the only USB camera.
+> - **Rule of thumb:** re-run `--cf` (or read the startup log) and update `video_id` whenever you change what's plugged in.
+>
+> Cameras identified by `serial_number` / `physical_path` don't have this problem — they're matched by identity (and are skipped with a warning if not found, rather than crashing). RealSense cameras always resolve by `serial_number`, so they're never affected.
 
 #### A. RGB-only camera (plain USB / OpenCV)
 
@@ -252,6 +289,9 @@ example_usb_camera:            # topic name — this is the id shown downstream
   image_shape: [480, 640]  # [height, width] — must match a format from --cf
   fps: 30
   # identifiers: physical_path > serial_number > video_id (see section 1.3 notes)
+  # NOTE: many webcams expose two devices sharing one serial — if the server
+  # crashes with "Multiple video devices found", switch to video_id (see the
+  # ⚠️ box above).
   video_id: null
   serial_number: 200901010001   # from --cf
   physical_path: null

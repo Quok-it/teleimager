@@ -572,7 +572,12 @@ class CameraFinder:
         if realsense_enable:
             self.rs_serial_numbers = self._list_realsense_serial_numbers()
             self.rs_video_paths = self._list_realsense_video_paths()
-            self.rs_rgb_video_paths = [p for p in self.rs_video_paths if self._is_like_rgb(p)]
+            # Do NOT cv2-probe RealSense nodes: opening a depth/IR node with
+            # cv2.VideoCapture().read() blocks forever (V4L2 read has no timeout),
+            # which hangs discovery/startup whenever a RealSense (e.g. D405) is
+            # not already claimed. RealSense streams are driven by pyrealsense2
+            # via serial number, so this (log-only) list is intentionally empty.
+            self.rs_rgb_video_paths = []
         else:
             self.rs_serial_numbers = []
             self.rs_video_paths = []
@@ -612,7 +617,9 @@ class CameraFinder:
         return [f"/dev/{x}" for x in sorted(os.listdir(base)) if x.startswith("video")]
 
     def _list_uvc_rgb_video_paths(self):
-        return [p for p in self.video_paths if self._is_like_rgb(p) and p not in self.rs_video_paths]
+        # Exclude RealSense nodes BEFORE probing: _is_like_rgb() opens the node
+        # with cv2 and would block forever on a RealSense depth/IR node.
+        return [p for p in self.video_paths if p not in self.rs_video_paths and self._is_like_rgb(p)]
 
     def _list_realsense_video_paths(self):
         def _read_text(path):
