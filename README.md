@@ -367,9 +367,9 @@ Suggested port layout when you have several cameras: color ports `55570, 55571, 
 
 Notes for multiple cameras:
 
-- **Recording slot order follows the order topics appear in this file.** Extras fill `color_3`, `color_4`, … (after head=0 and the two wrists=1/2). Keep the topic order stable across recording sessions, or the camera↔slot mapping in your dataset will shift.
+- **Recording slot order follows the order topics appear in this file.** `head_camera` is always `color_0`; every other camera (any topic name — there are no reserved wrist slots) fills `color_1`, `color_2`, … in the order it appears here. Keep the topic order stable across recording sessions, or the camera↔slot mapping in your dataset will shift.
 - **USB bandwidth is the real-world limit.** Several MJPEG cameras on one USB controller can saturate the bus and drop frames; if so, lower resolution/fps or spread cameras across different USB ports/controllers. The `--cf` output lists each camera's supported formats.
-- A dead or unplugged camera simply yields empty frames for its slot — the other cameras keep streaming and there's no crash.
+- **Unplugging behaviour depends on how the camera is identified.** A camera matched by `serial_number`/`physical_path` (and any RealSense) is skipped gracefully if missing — other cameras keep streaming, no crash. A camera matched by `video_id` is **not** safe to leave configured while unplugged (its slot may be taken by another device → server crash); see the ⚠️ box above.
 
 ## 2. 🔴 LiDAR Support (Unitree G1 MID360)
 

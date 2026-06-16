@@ -713,12 +713,6 @@ class ImageClient:
         if self._cam_config['head_camera'].get('enable_depth') and self._cam_config['head_camera'].get('zmq_depth_port'):
             self._subscriber_manager.subscribe(self._host, self._cam_config['head_camera']['zmq_depth_port'], request_bgr=False)
 
-        rw_cfg = self._cam_config.get('right_wrist_camera')
-        if rw_cfg and rw_cfg.get('enable_zmq'):
-            self._subscriber_manager.subscribe(self._host, rw_cfg['zmq_port'], request_bgr=self._request_bgr)
-        if rw_cfg and rw_cfg.get('enable_depth') and rw_cfg.get('zmq_depth_port'):
-            self._subscriber_manager.subscribe(self._host, rw_cfg['zmq_depth_port'], request_bgr=False)
-
         lidar_cfg = self._cam_config.get("lidar", {})
         if lidar_cfg.get("enable"):
             self._subscriber_manager.subscribe(self._host, lidar_cfg["zmq_cloud_port"], request_bgr=False)
@@ -747,23 +741,6 @@ class ImageClient:
         # depth_shape, falling back to image_shape for cameras that share one.
         head_cfg = self._cam_config['head_camera']
         h, w = head_cfg.get('depth_shape', head_cfg['image_shape'])
-        return np.frombuffer(raw.jpg, dtype=np.uint16).reshape(h, w)
-
-    def get_left_wrist_frame(self):
-        return self._subscriber_manager.subscribe(self._host, self._cam_config['left_wrist_camera']['zmq_port'], request_bgr=self._request_bgr)
-    
-    def get_right_wrist_frame(self):
-        return self._subscriber_manager.subscribe(self._host, self._cam_config['right_wrist_camera']['zmq_port'], request_bgr=self._request_bgr)
-
-    def get_right_wrist_depth_frame(self):
-        rw_cfg = self._cam_config.get('right_wrist_camera') or {}
-        depth_port = rw_cfg.get('zmq_depth_port')
-        if not rw_cfg.get('enable_depth') or not depth_port:
-            return None
-        raw = self._subscriber_manager.subscribe(self._host, depth_port, request_bgr=False)
-        if raw is None or raw.jpg is None:
-            return None
-        h, w = rw_cfg['image_shape']
         return np.frombuffer(raw.jpg, dtype=np.uint16).reshape(h, w)
 
     def get_lidar_cloud(self) -> Optional[np.ndarray]:
@@ -805,20 +782,6 @@ def main():
                 logger_mp.debug(f"Head Camera Shape: {cam_config['head_camera']['image_shape']}")
                 logger_mp.debug(f"Head Camera Binocular: {cam_config['head_camera']['binocular']}")
                 cv2.imshow("Head Camera", head_img.bgr)
-
-        if cam_config['left_wrist_camera']['enable_zmq']:
-            left_wrist_img = client.get_left_wrist_frame()
-            if left_wrist_img.bgr is not None:
-                logger_mp.info(f"Left Wrist Camera FPS: {left_wrist_img.fps:.2f}")
-                logger_mp.debug(f"Left Wrist Camera Shape: {cam_config['left_wrist_camera']['image_shape']}")
-                cv2.imshow("Left Wrist Camera", left_wrist_img.bgr)
-
-        if cam_config['right_wrist_camera']['enable_zmq']:
-            right_wrist_img = client.get_right_wrist_frame()
-            if right_wrist_img.bgr is not None:
-                logger_mp.info(f"Right Wrist Camera FPS: {right_wrist_img.fps:.2f}")
-                logger_mp.debug(f"Right Wrist Camera Shape: {cam_config['right_wrist_camera']['image_shape']}")
-                cv2.imshow("Right Wrist Camera", right_wrist_img.bgr)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             logger_mp.info("Exiting image client on user request.")
