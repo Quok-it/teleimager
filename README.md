@@ -263,6 +263,16 @@ Workflow for every extra camera:
 >
 > **Which number?** The crash message lists them, e.g. `['/dev/video6', '/dev/video8']` → use `video_id: 6`. (Don't trust the number from `--cf` while the server is running — the server reloads the camera driver on startup and the numbers shift. The crash log shows the real ones.) Pick the lower number first; if the picture is black, switch to the other.
 
+> **⚠️ `video_id` is positional — it shifts when you plug/unplug other cameras.**
+>
+> A `video_id` is **not** tied to a specific camera; it's just the current `/dev/videoN` slot, which depends on what else is connected.
+>
+> - **Unplugging:** if you remove a USB camera but leave its block in the yaml, that number may now belong to a **different** device (e.g. a RealSense depth node). The server tries to open it, fails to read frames, raises `RuntimeError: [OpenCVCamera] … failed to initialize or read frames`, and **the whole server crashes** — every camera goes down. So comment out / delete any `video_id` camera that isn't connected.
+> - **Adding:** plugging in another camera (e.g. a RealSense) can renumber an existing USB camera. Running BRIO + D405 together is fine, but the BRIO's `video_id` will differ from when it was the only USB camera.
+> - **Rule of thumb:** re-run `--cf` (or read the startup log) and update `video_id` whenever you change what's plugged in.
+>
+> Cameras identified by `serial_number` / `physical_path` don't have this problem — they're matched by identity (and are skipped with a warning if not found, rather than crashing). RealSense cameras always resolve by `serial_number`, so they're never affected.
+
 #### A. RGB-only camera (plain USB / OpenCV)
 
 Most USB cameras (grippers, wrist cams, webcams, etc.) are color-only. Use `type: opencv`:
